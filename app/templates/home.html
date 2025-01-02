@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Lemtosh{% endblock %}
+
+{% block content %}
+<div class="navbar">
+    <div class="model-selector">
+        <label for="model-select">Model:</label>
+        <div class="model-selector">
+            <label for="model-select">Model:</label>
+            <select id="model-select" class="form-control">
+            </select>
+        </div>
+    </div>
+    <div class="user-info">
+        <span id="username-display"></span>
+        <button onclick="logout()" class="btn btn-small">Logout</button>
+    </div>
+</div>
+
+<div class="main-content">
+    <button id="new-chat-btn" class="btn">Start New Chat</button>
+    
+    <div class="archives-section">
+        <h2>Archives</h2>
+        <div id="chat-list" class="chat-list">
+            <!-- Chat history will be populated here -->
+        </div>
+    </div>
+</div>
+
+<style>
+    .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        margin-bottom: 2rem;
+    }
+
+    .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .model-selector select {
+        padding: 0.5rem;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .main-content {
+        padding: 1rem;
+    }
+
+    #new-chat-btn {
+        margin-bottom: 2rem;
+        padding: 0.75rem 1.5rem;
+    }
+
+    .archives-section {
+        border-top: 1px solid #dee2e6;
+        padding-top: 1rem;
+    }
+
+    .chat-list {
+        margin-top: 1rem;
+    }
+
+    .btn-small {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Display username
+    const username = localStorage.getItem('username');
+    document.getElementById('username-display').textContent = username;
+
+    // Check authentication
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/auth/login';
+    }
+});
+
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    window.location.href = '/auth/login';
+}
+
+document.getElementById('new-chat-btn').addEventListener('click', () => {
+    // TODO: Implement new chat creation
+    console.log('Starting new chat with model:', document.getElementById('model-select').value);
+});
+</script>
+
+<script>
+    async function loadAvailableModels() {
+        try {
+            const response = await fetch('/api/models', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            const models = await response.json();
+            
+            const select = document.getElementById('model-select');
+            select.innerHTML = '';  // Clear existing options
+            
+            Object.entries(models).forEach(([id, config]) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = config.name;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading models:', error);
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        loadAvailableModels();
+        // ... rest of your existing DOMContentLoaded code ...
+    });
+</script>
+{% endblock %}
