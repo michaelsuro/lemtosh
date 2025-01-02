@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Lemtosh{% endblock %}
+
+{% block content %}
+<h1>Login</h1>
+<form id="loginForm">
+    <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required>
+    </div>
+    <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+    </div>
+    <button type="submit" class="btn">Login</button>
+    <div id="errorMessage" class="error-message"></div>
+</form>
+<div class="auth-links">
+    <p>Don't have an account? <a href="/auth/register">Register here</a></p>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorMessage = document.getElementById('errorMessage');
+    
+    try {
+        const formData = new URLSearchParams();
+        formData.append('username', document.getElementById('username').value);
+        formData.append('password', document.getElementById('password').value);
+        formData.append('grant_type', 'password');  // Required for OAuth2
+
+        const response = await fetch('/auth/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            errorMessage.textContent = data.detail || 'Login failed. Please check your credentials.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('username', data.username);
+        window.location.href = '/';
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        errorMessage.textContent = 'An error occurred. Please try again.';
+        errorMessage.style.display = 'block';
+    }
+});
+</script>
+{% endblock %}
