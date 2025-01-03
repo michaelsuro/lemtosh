@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from typing import Optional
 import traceback
 from app.services.auth import get_current_user
-from app.services.llm import get_llm_response
+from app.services.llm import llm_service, get_llm_response  # Add this import
 from app.models.user import User
 
 router = APIRouter()
@@ -32,21 +31,8 @@ async def chat(
                 detail=f"Model is not ready. Current status: {status.get('status')}"
             )
         
-        try:
-            response = await get_llm_response(request.message, request.model)
-            return {"response": response}
-        except Exception as model_error:
-            print(f"[Chat] Model error: {str(model_error)}")
-            print("[Chat] Model error traceback:")
-            print(traceback.format_exc())
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error generating response: {str(model_error)}"
-            )
-            
-    except HTTPException as http_error:
-        # Re-raise HTTP exceptions
-        raise http_error
+        response = await get_llm_response(request.message, request.model)
+        return {"response": response}
     except Exception as e:
         print(f"[Chat] Unexpected error: {str(e)}")
         print("[Chat] Full traceback:")
