@@ -3,6 +3,9 @@
 {% block title %}Chat - Lemtosh{% endblock %}
 
 {% block content %}
+<head></head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+</head>
 <div class="chat-container">
     <div class="chat-header">
         <div class="model-info">
@@ -136,9 +139,27 @@
         border-radius: 4px;
         cursor: pointer;
     }
+
+    .message.loading {
+        align-self: flex-start;
+        background-color: #f8f9fa;
+        color: #666;
+    }
+
+    .loading-dots::after {
+        content: '';
+        animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { content: ''; }
+        40% { content: '.'; }
+        60% { content: '..'; }
+        80%, 100% { content: '...'; }
+    }
 </style>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script> -->
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
      // Check authentication first
@@ -146,6 +167,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!token) {
         window.location.href = '/auth/login';
         return;
+    }
+
+    if (typeof marked === 'undefined') {
+        console.error('Marked library not loaded!');
+    } else {
+        console.log('Marked library loaded successfully');
+        // Configure marked
+        marked.setOptions({
+            gfm: true,
+            breaks: true
+        });
     }
 
     try {
@@ -181,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         mangle: false
     });
 
-    function addMessage(content, isUser = false) {
+    function addMessage(content, isUser = false, skipMarkdown = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message');
         messageDiv.classList.add(isUser ? 'user-message' : 'assistant-message');
@@ -189,16 +221,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
         
-        if (isUser) {
+        if (isUser || skipMarkdown) {
             contentDiv.textContent = content;
         } else {
-            // Parse markdown for assistant messages
-            contentDiv.innerHTML = marked(content);
+            try {
+                contentDiv.innerHTML = marked(content);
+            } catch (error) {
+                console.error('Markdown parsing failed:', error);
+                contentDiv.textContent = content;
+            }
         }
 
         messageDiv.appendChild(contentDiv);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addLoadingMessage() {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', 'loading');
+        messageDiv.id = 'loading-message';
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        contentDiv.innerHTML = 'Generating response<span class="loading-dots"></span>';
+        messageDiv.appendChild(contentDiv);
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeLoadingMessage() {
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
     }
 
     chatForm.addEventListener('submit', async (e) => {
@@ -213,9 +268,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Add user message to chat
         addMessage(message, true);
-
         // Clear input
         messageInput.value = '';
+        // Show loading state
+        addLoadingMessage();
 
         try {
             const response = await fetch('/api/chat', {
@@ -226,19 +282,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 body: JSON.stringify({
                     message: message,
-                    model: 'mistral-7b'
+                    model: document.getElementById('model-select')?.value || 'mistral-7b'
                 })
             });
 
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
-            if (response.ok) {
+            removeLoadingMessage();
+            if (data.response) {
                 addMessage(data.response);
-            } else {
-                addMessage('Error: ' + data.detail);
             }
         } catch (error) {
             console.error('Chat error:', error);
-            addMessage('Error: Failed to send message');
+            removeLoadingMessage();
+            addMessage(`Error: ${error.message}`);
         } finally {
             // Re-enable input and button
             messageInput.disabled = false;

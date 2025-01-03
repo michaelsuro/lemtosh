@@ -3,12 +3,20 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
+from app.services.llm import llm_service  
 
 from app.database import engine, Base
 from app.api import auth, chat, models
 from app.services.auth import get_current_user
 
 app = FastAPI(title="Lemtosh")
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    print("Starting up server...")
+    llm_service.initialize()
+    print("Server startup complete")
 
 # Create database tables
 print("Creating database tables...") 
@@ -21,9 +29,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Initialize templates
 templates = Jinja2Templates(directory="app/templates")
 
-# Include routers
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-
 @app.get("/")
 async def root(request: Request):
     try:
@@ -33,6 +38,7 @@ async def root(request: Request):
     except HTTPException:
         return RedirectResponse(url="/auth/login")
 
+# Include routers
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(models.router, prefix="/api", tags=["models"])
