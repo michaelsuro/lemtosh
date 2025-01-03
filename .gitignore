@@ -43,4 +43,9 @@ wheels/
 *.log
 
 # Model files
-models/*.gguf
+models/*
+!models/.gitkeep
+
+# macOS system files
+.DS_Store
+*/.DS_Store

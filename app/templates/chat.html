@@ -3,13 +3,11 @@
 {% block title %}Chat - Lemtosh{% endblock %}
 
 {% block content %}
-<head></head>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-</head>
 <div class="chat-container">
     <div class="chat-header">
         <div class="model-info">
             Using: <span id="current-model">Mistral 7B</span>
+            <div id="model-status" class="model-status">Checking status...</div>
         </div>
         <div class="nav-buttons">
             <button onclick="window.location.href='/'" class="btn-small">← Back to Home</button>
@@ -140,44 +138,58 @@
         cursor: pointer;
     }
 
-    .message.loading {
-        align-self: flex-start;
-        background-color: #f8f9fa;
-        color: #666;
+    .model-status {
+        margin-left: 10px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        display: inline-block;
     }
-
-    .loading-dots::after {
-        content: '';
-        animation: dots 1.5s steps(5, end) infinite;
+    
+    .model-status.ready {
+        background-color: #28a745;
+        color: white;
     }
-
-    @keyframes dots {
-        0%, 20% { content: ''; }
-        40% { content: '.'; }
-        60% { content: '..'; }
-        80%, 100% { content: '...'; }
+    
+    .model-status.loading {
+        background-color: #ffc107;
+        color: black;
+    }
+    
+    .model-status.error {
+        background-color: #dc3545;
+        color: white;
     }
 </style>
 
-<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script> -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 <script>
+// Initialize marked first
+if (typeof marked === 'undefined') {
+    console.error('Marked library not loaded!');
+} else {
+    console.log('Marked library loaded successfully');
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-     // Check authentication first
+    // Get DOM elements
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const chatMessages = document.getElementById('chat-messages');
+    const sendButton = document.getElementById('send-button');
+    const modelStatusElement = document.getElementById('model-status');
+
+    // Check authentication
     const token = localStorage.getItem('token');
     if (!token) {
         window.location.href = '/auth/login';
         return;
-    }
-
-    if (typeof marked === 'undefined') {
-        console.error('Marked library not loaded!');
-    } else {
-        console.log('Marked library loaded successfully');
-        // Configure marked
-        marked.setOptions({
-            gfm: true,
-            breaks: true
-        });
     }
 
     try {
@@ -188,7 +200,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         
         if (!response.ok) {
-            // Token invalid
             localStorage.removeItem('token');
             localStorage.removeItem('username');
             window.location.href = '/auth/login';
@@ -199,21 +210,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '/auth/login';
         return;
     }
-    
-    const chatForm = document.getElementById('chat-form');
-    const messageInput = document.getElementById('message-input');
-    const chatMessages = document.getElementById('chat-messages');
-    const sendButton = document.getElementById('send-button');
 
-    // Configure marked for safe markdown rendering
-    marked.setOptions({
-        breaks: true,
-        gfm: true,
-        headerIds: false,
-        mangle: false
-    });
+    async function checkModelStatus() {
+        try {
+            console.log('Checking model status...');
+            const response = await fetch('/api/models', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const models = await response.json();
+            console.log('Model status response:', models);
+            
+            const currentModel = 'mistral-7b';
+            const status = models[currentModel]?.status?.status;
+            console.log('Current model status:', status);
+            
+            if (modelStatusElement) {
+                modelStatusElement.textContent = status === 'ready' ? 'Ready' 
+                                            : status === 'loading' ? 'Loading...' 
+                                            : 'Error';
+                modelStatusElement.className = `model-status ${status}`;
+            }
+            
+            return status === 'ready';
+        } catch (error) {
+            console.error('Error checking model status:', error);
+            if (modelStatusElement) {
+                modelStatusElement.textContent = 'Error checking status';
+                modelStatusElement.className = 'model-status error';
+            }
+            return false;
+        }
+    }
 
-    function addMessage(content, isUser = false, skipMarkdown = false) {
+    function addMessage(content, isUser = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message');
         messageDiv.classList.add(isUser ? 'user-message' : 'assistant-message');
@@ -221,7 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
         
-        if (isUser || skipMarkdown) {
+        if (isUser) {
             contentDiv.textContent = content;
         } else {
             try {
@@ -237,29 +268,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function addLoadingMessage() {
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message', 'loading');
-        messageDiv.id = 'loading-message';
-        const contentDiv = document.createElement('div');
-        contentDiv.classList.add('message-content');
-        contentDiv.innerHTML = 'Generating response<span class="loading-dots"></span>';
-        messageDiv.appendChild(contentDiv);
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function removeLoadingMessage() {
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.remove();
-        }
-    }
-
     chatForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const message = messageInput.value.trim();
         if (!message) return;
+
+        // Check model status before sending
+        const isReady = await checkModelStatus();
+        if (!isReady) {
+            addMessage("Model is still loading or unavailable. Please try again in a moment.", false);
+            return;
+        }
 
         // Disable input and button while processing
         messageInput.disabled = true;
@@ -268,39 +287,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Add user message to chat
         addMessage(message, true);
+
         // Clear input
         messageInput.value = '';
-        // Show loading state
-        addLoadingMessage();
 
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     message: message,
-                    model: document.getElementById('model-select')?.value || 'mistral-7b'
+                    model: 'mistral-7b'
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Server error: ${response.status}`);
             }
 
             const data = await response.json();
-            removeLoadingMessage();
-            if (data.response) {
-                addMessage(data.response);
-            }
+            addMessage(data.response);
         } catch (error) {
             console.error('Chat error:', error);
-            removeLoadingMessage();
             addMessage(`Error: ${error.message}`);
         } finally {
-            // Re-enable input and button
             messageInput.disabled = false;
             sendButton.disabled = false;
             sendButton.textContent = 'Send';
@@ -315,6 +329,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             chatForm.dispatchEvent(new Event('submit'));
         }
     });
+
+    // Initial status check
+    await checkModelStatus();
+    
+    // Poll for status every 5 seconds
+    setInterval(checkModelStatus, 5000);
 });
 </script>
 {% endblock %}

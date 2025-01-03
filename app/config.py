@@ -36,8 +36,10 @@ class Settings:
             "name": "Mistral 7B",
             "path": "models/mistral-7b-instruct-v0.1.Q4_K_M.gguf",
             "type": "mistral",
-            "context_length": 8192,
-            "gpu_layers": 0,  # 0 for local CPU testing
+            "context_length": 2048,  # Reduced from 4096
+            "gpu_layers": 0,
+            "batch_size": 1,
+            "threads": 4,
             "environment": ["development", "production"],
             "file_name": "mistral-7b-instruct-v0.1.Q4_K_M.gguf",
             "download_url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/blob/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf"
