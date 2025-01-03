@@ -7,3 +7,4 @@ python-multipart==0.0.6  # for form data processing
 jinja2==3.1.3  # for HTML templates
 python-dotenv==1.0.0  # for environment variables
 ctransformers==0.2.24
+markdown2==2.4.12

@@ -29,7 +29,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         const formData = new URLSearchParams();
         formData.append('username', document.getElementById('username').value);
         formData.append('password', document.getElementById('password').value);
-        formData.append('grant_type', 'password');  // Required for OAuth2
+        formData.append('grant_type', 'password');
 
         const response = await fetch('/auth/token', {
             method: 'POST',
@@ -41,16 +41,16 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
         const data = await response.json();
         
-        if (!response.ok) {
+        if (response.ok) {
+            // Add console.log to debug token storage
+            console.log('Login successful, storing token:', data);
+            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('username', data.username);
+            window.location.href = '/';
+        } else {
             errorMessage.textContent = data.detail || 'Login failed. Please check your credentials.';
             errorMessage.style.display = 'block';
-            return;
         }
-
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('username', data.username);
-        window.location.href = '/';
-        
     } catch (error) {
         console.error('Login error:', error);
         errorMessage.textContent = 'An error occurred. Please try again.';

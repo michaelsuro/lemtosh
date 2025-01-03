@@ -102,38 +102,38 @@ function logout() {
 }
 
 document.getElementById('new-chat-btn').addEventListener('click', () => {
-    // TODO: Implement new chat creation
+    window.location.href = '/chat';
     console.log('Starting new chat with model:', document.getElementById('model-select').value);
 });
 </script>
 
 <script>
-    async function loadAvailableModels() {
-        try {
-            const response = await fetch('/api/models', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            const models = await response.json();
-            
-            const select = document.getElementById('model-select');
-            select.innerHTML = '';  // Clear existing options
-            
-            Object.entries(models).forEach(([id, config]) => {
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = config.name;
-                select.appendChild(option);
-            });
-        } catch (error) {
-            console.error('Error loading models:', error);
-        }
+async function loadAvailableModels() {
+    try {
+        const response = await fetch('/api/models', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        const models = await response.json();
+        
+        const select = document.getElementById('model-select');
+        select.innerHTML = '';  // Clear existing options
+        
+        Object.entries(models).forEach(([id, config]) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = config.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading models:', error);
     }
-    
-    document.addEventListener('DOMContentLoaded', () => {
-        loadAvailableModels();
-        // ... rest of your existing DOMContentLoaded code ...
-    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadAvailableModels();
+    // ... rest of your existing DOMContentLoaded code ...
+});
 </script>
 {% endblock %}

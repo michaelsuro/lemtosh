@@ -37,8 +37,8 @@ class Settings:
             "path": "models/mistral-7b-instruct-v0.1.Q4_K_M.gguf",
             "type": "mistral",
             "context_length": 8192,
-            "gpu_layers": 0,  # Set higher for GPU usage
-            "environment": ["development", "production"],  # Available in both environments
+            "gpu_layers": 0,  # 0 for local CPU testing
+            "environment": ["development", "production"],
             "file_name": "mistral-7b-instruct-v0.1.Q4_K_M.gguf",
             "download_url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/blob/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf"
         },
@@ -47,8 +47,8 @@ class Settings:
             "path": "models/llama-2-13b-chat.Q4_K_M.gguf",
             "type": "llama",
             "context_length": 4096,
-            "gpu_layers": 0,
-            "environment": ["production"],  # Only available in production
+            "gpu_layers": 50,  # Using GPU in production
+            "environment": ["production"],
             "file_name": "llama-2-13b-chat.Q4_K_M.gguf",
             "download_url": "https://huggingface.co/TheBloke/Llama-2-13B-chat-GGUF/resolve/main/llama-2-13b-chat.Q4_K_M.gguf"
         },
@@ -57,7 +57,7 @@ class Settings:
             "path": "models/hermes-13b.Q4_K_M.gguf",
             "type": "llama2",
             "context_length": 4096,
-            "gpu_layers": 0,
+            "gpu_layers": 50,  # Using GPU in production
             "environment": ["production"],
             "file_name": "hermes-13b.Q4_K_M.gguf",
             "download_url": "https://huggingface.co/TheBloke/Hermes-13B-GGUF/resolve/main/hermes-13b.Q4_K_M.gguf"
@@ -67,7 +67,7 @@ class Settings:
             "path": "models/falcon-40b-instruct.Q4_K_M.gguf",
             "type": "falcon",
             "context_length": 4096,
-            "gpu_layers": 0,
+            "gpu_layers": 90,  # More GPU layers for larger model
             "environment": ["production"],
             "file_name": "falcon-40b-instruct.Q4_K_M.gguf",
             "download_url": "https://huggingface.co/TheBloke/falcon-40b-instruct-GGUF/resolve/main/falcon-40b-instruct.Q4_K_M.gguf"

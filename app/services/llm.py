@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 from ctransformers import AutoModelForCausalLM
+from app.config import settings
 
 class LLMService:
     def __init__(self):
@@ -11,21 +12,20 @@ class LLMService:
         if self.current_model_name == model_name:
             return
         
-        # Model paths - in production these would come from config
-        model_paths = {
-            "mistral-7b": "mistral-7b-instruct-v0.1.Q4_K_M.gguf",  # You'll need to download this
-        }
-
-        if model_name not in model_paths:
+        # Get model config from settings
+        model_config = settings.MODELS_CONFIG.get(model_name)
+        if not model_config:
             raise ValueError(f"Unknown model: {model_name}")
 
-        model_path = model_paths[model_name]
+        if model_name not in settings.get_available_models():
+            raise ValueError(f"Model {model_name} is not available in the current environment")
         
         # Load the model
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            model_type="mistral",
-            gpu_layers=0  # Set this higher if using GPU
+            model_config["path"],
+            model_type=model_config["type"],
+            context_length=model_config["context_length"],
+            gpu_layers=model_config["gpu_layers"]
         )
         self.current_model_name = model_name
 
@@ -33,7 +33,7 @@ class LLMService:
         if not self.model:
             raise RuntimeError("Model not loaded")
 
-        # Format prompt for Mistral
+        # Format prompt for the model
         formatted_prompt = f"<s>[INST] {prompt} [/INST]"
         
         # Generate response

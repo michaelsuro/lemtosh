@@ -8,6 +8,9 @@
         <div class="model-info">
             Using: <span id="current-model">Mistral 7B</span>
         </div>
+        <div class="nav-buttons">
+            <button onclick="window.location.href='/'" class="btn-small">← Back to Home</button>
+        </div>
     </div>
 
     <div class="chat-messages" id="chat-messages">
@@ -22,7 +25,7 @@
                 rows="3"
                 class="chat-input"
             ></textarea>
-            <button type="submit" class="send-button">Send</button>
+            <button type="submit" class="send-button" id="send-button">Send</button>
         </form>
     </div>
 </div>
@@ -37,6 +40,9 @@
     }
 
     .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         padding: 1rem;
         background-color: #f8f9fa;
         border-bottom: 1px solid #dee2e6;
@@ -55,7 +61,25 @@
         max-width: 80%;
         padding: 1rem;
         border-radius: 8px;
+        line-height: 1.5;
+    }
+
+    .message-content {
         white-space: pre-wrap;
+    }
+
+    .message-content code {
+        background-color: #f8f9fa;
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-family: monospace;
+    }
+
+    .message-content pre {
+        background-color: #f8f9fa;
+        padding: 1em;
+        border-radius: 5px;
+        overflow-x: auto;
     }
 
     .user-message {
@@ -66,7 +90,7 @@
 
     .assistant-message {
         align-self: flex-start;
-        background-color: #f1f3f5;
+        background-color: #f8f9fa;
         color: black;
     }
 
@@ -95,24 +119,84 @@
         border: none;
         border-radius: 4px;
         cursor: pointer;
+        min-width: 80px;
     }
 
-    .send-button:hover {
-        background-color: #0056b3;
+    .send-button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+
+    .btn-small {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
     }
 </style>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+     // Check authentication first
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/auth/login';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/verify-token', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            // Token invalid
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            window.location.href = '/auth/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Auth check failed:', error);
+        window.location.href = '/auth/login';
+        return;
+    }
+    
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
     const chatMessages = document.getElementById('chat-messages');
+    const sendButton = document.getElementById('send-button');
+
+    // Configure marked for safe markdown rendering
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
 
     function addMessage(content, isUser = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message');
         messageDiv.classList.add(isUser ? 'user-message' : 'assistant-message');
-        messageDiv.textContent = content;
+
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        
+        if (isUser) {
+            contentDiv.textContent = content;
+        } else {
+            // Parse markdown for assistant messages
+            contentDiv.innerHTML = marked(content);
+        }
+
+        messageDiv.appendChild(contentDiv);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -121,6 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const message = messageInput.value.trim();
         if (!message) return;
+
+        // Disable input and button while processing
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+        sendButton.textContent = 'Sending...';
 
         // Add user message to chat
         addMessage(message, true);
@@ -150,6 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Chat error:', error);
             addMessage('Error: Failed to send message');
+        } finally {
+            // Re-enable input and button
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
+            messageInput.focus();
         }
     });
 
