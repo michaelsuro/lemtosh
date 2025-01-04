@@ -6,11 +6,8 @@
 <div class="navbar">
     <div class="model-selector">
         <label for="model-select">Model:</label>
-        <div class="model-selector">
-            <label for="model-select">Model:</label>
-            <select id="model-select" class="form-control">
-            </select>
-        </div>
+        <select id="model-select" class="form-control">
+        </select>
     </div>
     <div class="user-info">
         <span id="username-display"></span>
@@ -80,34 +77,63 @@
         padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
     }
+
+    /* New styles for chat archives */
+    .chat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .chat-item:hover {
+        background-color: #e9ecef;
+    }
+
+    .chat-title {
+        font-weight: 500;
+    }
+
+    .chat-date {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+
+    .no-chats {
+        text-align: center;
+        color: #6c757d;
+        padding: 2rem;
+        font-style: italic;
+    }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    // Display username
-    const username = localStorage.getItem('username');
-    document.getElementById('username-display').textContent = username;
-
+// Initialize available models and chat archives when page loads
+document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication
     const token = localStorage.getItem('token');
     if (!token) {
         window.location.href = '/auth/login';
+        return;
     }
+
+    // Display username
+    const username = localStorage.getItem('username');
+    document.getElementById('username-display').textContent = username;
+
+    // Load available models
+    await loadAvailableModels();
+    
+    // Load chat archives
+    await loadChatArchives();
 });
 
-function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    window.location.href = '/auth/login';
-}
-
-document.getElementById('new-chat-btn').addEventListener('click', () => {
-    window.location.href = '/chat';
-    console.log('Starting new chat with model:', document.getElementById('model-select').value);
-});
-</script>
-
-<script>
+// Function to load available models
 async function loadAvailableModels() {
     try {
         const response = await fetch('/api/models', {
@@ -131,9 +157,59 @@ async function loadAvailableModels() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadAvailableModels();
-    // ... rest of your existing DOMContentLoaded code ...
+// Function to load chat archives
+async function loadChatArchives() {
+    try {
+        const response = await fetch('/api/chats', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load chat archives');
+        }
+
+        const chats = await response.json();
+        const chatList = document.getElementById('chat-list');
+        
+        if (chats.length === 0) {
+            chatList.innerHTML = '<div class="no-chats">No chat history yet</div>';
+            return;
+        }
+
+        chatList.innerHTML = chats
+            .map(chat => `
+                <div class="chat-item" onclick="openChat(${chat.id})">
+                    <span class="chat-title">${chat.title}</span>
+                    <span class="chat-date">${new Date(chat.updated_at).toLocaleString()}</span>
+                </div>
+            `)
+            .join('');
+    } catch (error) {
+        console.error('Error loading chat archives:', error);
+        document.getElementById('chat-list').innerHTML = 
+            '<div class="no-chats">Error loading chat history</div>';
+    }
+}
+
+// Function to handle opening a chat
+function openChat(chatId) {
+    window.location.href = `/chat?id=${chatId}`;
+}
+
+// Function to handle logout
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    window.location.href = '/auth/login';
+}
+
+// Handle new chat button click
+document.getElementById('new-chat-btn').addEventListener('click', () => {
+    const selectedModel = document.getElementById('model-select').value;
+    localStorage.setItem('selectedModel', selectedModel);
+    window.location.href = '/chat';
 });
 </script>
 {% endblock %}

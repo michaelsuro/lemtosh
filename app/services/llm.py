@@ -94,10 +94,10 @@ class LLMService:
             return {"status": ModelStatus.READY, "error": None}
         return read_status(model_name)
 
-    async def get_response(self, message: str, model_name: str) -> str:
-        """Generate a response from the model"""
+    async def get_response(self, message: str, model_name: str, chat_history: list = None) -> str:
+        """Generate a response from the model with chat history context"""
         try:
-            print(f"[LLM] Generating response for message: {message[:50]}...")
+            print(f"[LLM] Generating response for message with {len(chat_history) if chat_history else 0} previous messages")
             
             if not self._initialized or self.model is None:
                 raise ValueError("Model not initialized")
@@ -105,17 +105,48 @@ class LLMService:
             if self.current_model_name != model_name:
                 raise ValueError(f"Requested model {model_name} is not the currently loaded model")
 
-            formatted_prompt = f"<s>[INST] {message} [/INST]"
-            response = self.model(
-                formatted_prompt,
-                max_new_tokens=512,
-                temperature=0.7,
-                stop=["</s>"]
-            )
+            # Limit chat history to last 5 messages to prevent context overflow
+            if chat_history:
+                chat_history = chat_history[-5:]
+                
+            formatted_prompt = ""
+            current_length = 0
+            max_history_chars = 4000  # Reduced from previous value
             
-            print(f"[LLM] Generated response successfully")
-            return response.strip()
+            # Add chat history if provided
+            if chat_history:
+                for msg in chat_history:
+                    msg_content = f"[INST] {msg['user_message']} [/INST] {msg['assistant_response']}"
+                    msg_length = len(msg_content)
+                    
+                    if current_length + msg_length > max_history_chars:
+                        print(f"[LLM] Reached history limit at {current_length} characters")
+                        break
+                        
+                    formatted_prompt += msg_content
+                    current_length += msg_length
+                
+                print(f"[LLM] Included {current_length} characters of chat history")
             
+            # Add current message
+            formatted_prompt += f"<s>[INST] {message} [/INST]"
+            
+            print(f"[LLM] Total prompt length: {len(formatted_prompt)} characters")
+            
+            # Add timeout protection
+            try:
+                response = self.model(
+                    formatted_prompt,
+                    max_new_tokens=512,
+                    temperature=0.7,
+                    stop=["</s>"]
+                )
+                print(f"[LLM] Generated response successfully")
+                return response.strip()
+            except Exception as e:
+                print(f"[LLM] Error during model inference: {str(e)}")
+                raise ValueError("Model inference failed - please try again")
+                
         except Exception as e:
             print(f"[LLM] Error generating response: {str(e)}")
             print("[LLM] Full traceback:")
@@ -125,12 +156,12 @@ class LLMService:
 # Global instance
 llm_service = LLMService()
 
-async def get_llm_response(message: str, model_name: str) -> str:
+async def get_llm_response(message: str, model_name: str, chat_history: list = None) -> str:
     """Helper function to get response from LLM service"""
     try:
-        return await llm_service.get_response(message, model_name)
+        return await llm_service.get_response(message, model_name, chat_history)
     except Exception as e:
         print(f"[LLM] Error in get_llm_response: {str(e)}")
         print("[LLM] Full traceback:")
         print(traceback.format_exc())
-        raise
+        raise ValueError(f"Failed to generate response: {str(e)}")

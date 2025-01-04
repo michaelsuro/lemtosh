@@ -3,6 +3,7 @@
 {% block title %}Chat - Lemtosh{% endblock %}
 
 {% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 <div class="chat-container">
     <div class="chat-header">
         <div class="model-info">
@@ -81,6 +82,24 @@
         padding: 1em;
         border-radius: 5px;
         overflow-x: auto;
+    }
+
+    .message-content p {
+        margin: 0.5em 0;  /* Reduce space between paragraphs */
+    }
+
+    .message-content ul, 
+    .message-content ol {
+        margin: 0.5em 0;  /* Reduce space before and after lists */
+        padding-left: 1.5em;  /* Adjust list indentation */
+    }
+
+    .message-content li {
+        margin: 0.25em 0;  /* Reduce space between list items */
+    }
+
+    .message-content pre {
+        margin: 0.5em 0;  /* Reduce space around code blocks */
     }
 
     .user-message {
@@ -162,30 +181,180 @@
     }
 </style>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
 <script>
-// Initialize marked first
-if (typeof marked === 'undefined') {
-    console.error('Marked library not loaded!');
-} else {
-    console.log('Marked library loaded successfully');
-    marked.setOptions({
-        breaks: true,
-        gfm: true,
-        headerIds: false,
-        mangle: false
+// Initialize marked function
+function waitForMarked(maxAttempts = 10) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const checkMarked = () => {
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true,
+                    headerIds: false,
+                    mangle: false
+                });
+                console.log('Marked library initialized successfully');
+                resolve(marked);
+            } else {
+                attempts++;
+                if (attempts >= maxAttempts) {
+                    console.error('Failed to load marked library');
+                    reject(new Error('Marked library not available'));
+                } else {
+                    setTimeout(checkMarked, 100);
+                }
+            }
+        };
+        checkMarked();
     });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    // Get DOM elements
-    const chatForm = document.getElementById('chat-form');
-    const messageInput = document.getElementById('message-input');
+// Define all utility functions first
+function addMessage(content, isUser = false) {
     const chatMessages = document.getElementById('chat-messages');
-    const sendButton = document.getElementById('send-button');
-    const modelStatusElement = document.getElementById('model-status');
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message');
+    messageDiv.classList.add(isUser ? 'user-message' : 'assistant-message');
 
-    // Check authentication
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
+    
+    if (isUser) {
+        contentDiv.textContent = content;
+    } else {
+        try {
+            if (typeof marked !== 'undefined') {
+                contentDiv.innerHTML = marked.parse(content);
+            } else {
+                contentDiv.textContent = content;
+            }
+        } catch (error) {
+            console.error('Markdown parsing failed:', error);
+            contentDiv.textContent = content;
+        }
+    }
+
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function checkModelStatus() {
+    try {
+        const modelStatusElement = document.getElementById('model-status');
+        if (!modelStatusElement) {
+            console.error('Model status element not found');
+            return false;
+        }
+
+        console.log('Checking model status...');
+        const response = await fetch('/api/models', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        const models = await response.json();
+        console.log('Model status response:', models);
+        
+        const currentModel = 'mistral-7b';
+        const status = models[currentModel]?.status?.status;
+        console.log('Current model status:', status);
+        
+        if (modelStatusElement) {
+            if (status === 'ready') {
+                modelStatusElement.textContent = 'Ready';
+                modelStatusElement.className = 'model-status ready';
+            } else if (status === 'loading') {
+                modelStatusElement.textContent = 'Loading...';
+                modelStatusElement.className = 'model-status loading';
+            } else {
+                modelStatusElement.textContent = 'Error';
+                modelStatusElement.className = 'model-status error';
+            }
+        }
+        
+        return status === 'ready';
+    } catch (error) {
+        console.error('Error checking model status:', error);
+        if (modelStatusElement) {
+            modelStatusElement.textContent = 'Error checking status';
+            modelStatusElement.className = 'model-status error';
+        }
+        return false;
+    }
+}
+
+async function loadChatHistory(chatId) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) {
+        console.error('Chat messages container not found');
+        return;
+    }
+
+    try {
+        console.log('Loading chat history for chat:', chatId);
+        const response = await fetch(`/api/chats/${chatId}/messages`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load chat history');
+        }
+
+        const messages = await response.json();
+        console.log('Loaded messages:', messages.length, 'messages');
+        
+        // Clear existing messages
+        chatMessages.innerHTML = '';
+        
+        // Wait for marked to be available before adding messages
+        await waitForMarked();
+        
+        // Add each message pair to the chat
+        messages.forEach(msg => {
+            addMessage(msg.user_message, true);
+            addMessage(msg.assistant_response, false);
+        });
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+        addMessage('Error loading chat history', false);
+    }
+}
+
+async function sendMessage(message, chatId = null) {
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+            message: message,
+            model: 'mistral-7b',
+            chat_id: chatId
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+// Main initialization
+document.addEventListener('DOMContentLoaded', async () => {
+
+    // Initialize marked first
+    await waitForMarked();
+
+    // Authentication check
     const token = localStorage.getItem('token');
     if (!token) {
         window.location.href = '/auth/login';
@@ -193,7 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        const response = await fetch('/api/verify-token', {
+        const response = await fetch('/auth/verify-token', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -211,118 +380,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    async function checkModelStatus() {
-        try {
-            console.log('Checking model status...');
-            const response = await fetch('/api/models', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            const models = await response.json();
-            console.log('Model status response:', models);
-            
-            const currentModel = 'mistral-7b';
-            const status = models[currentModel]?.status?.status;
-            console.log('Current model status:', status);
-            
-            if (modelStatusElement) {
-                modelStatusElement.textContent = status === 'ready' ? 'Ready' 
-                                            : status === 'loading' ? 'Loading...' 
-                                            : 'Error';
-                modelStatusElement.className = `model-status ${status}`;
-            }
-            
-            return status === 'ready';
-        } catch (error) {
-            console.error('Error checking model status:', error);
-            if (modelStatusElement) {
-                modelStatusElement.textContent = 'Error checking status';
-                modelStatusElement.className = 'model-status error';
-            }
-            return false;
-        }
+    // Get chat ID from URL if it exists
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentChatId = urlParams.get('id');
+    
+    // Load chat history if we have a chat ID
+    if (currentChatId) {
+        await loadChatHistory(currentChatId);
     }
 
-    function addMessage(content, isUser = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message');
-        messageDiv.classList.add(isUser ? 'user-message' : 'assistant-message');
+    // Get DOM elements
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button'); 
 
-        const contentDiv = document.createElement('div');
-        contentDiv.classList.add('message-content');
-        
-        if (isUser) {
-            contentDiv.textContent = content;
-        } else {
-            try {
-                contentDiv.innerHTML = marked(content);
-            } catch (error) {
-                console.error('Markdown parsing failed:', error);
-                contentDiv.textContent = content;
-            }
-        }
-
-        messageDiv.appendChild(contentDiv);
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
+    // Form submission handler
     chatForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const message = messageInput.value.trim();
-        if (!message) return;
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (!message) return;
 
-        // Check model status before sending
-        const isReady = await checkModelStatus();
-        if (!isReady) {
-            addMessage("Model is still loading or unavailable. Please try again in a moment.", false);
-            return;
-        }
+            // Disable input while processing
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
 
-        // Disable input and button while processing
-        messageInput.disabled = true;
-        sendButton.disabled = true;
-        sendButton.textContent = 'Sending...';
+            try {
+                // Add user message immediately
+                addMessage(message, true);
+                messageInput.value = '';
 
-        // Add user message to chat
-        addMessage(message, true);
+                const data = await sendMessage(message, currentChatId);
+                
+                // Update chat ID if this was a new chat
+                if (!currentChatId && data.chat_id) {
+                    currentChatId = data.chat_id;
+                    window.history.pushState({}, '', `/chat?id=${currentChatId}`);
+                }
 
-        // Clear input
-        messageInput.value = '';
-
-        try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    message: message,
-                    model: 'mistral-7b'
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || `Server error: ${response.status}`);
+                // Add response
+                addMessage(data.response, false);
+            } catch (error) {
+                console.error('Chat error:', error);
+                addMessage(`Error: ${error.message}`, false);
+            } finally {
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send';
+                messageInput.focus();
             }
+        });
 
-            const data = await response.json();
-            addMessage(data.response);
-        } catch (error) {
-            console.error('Chat error:', error);
-            addMessage(`Error: ${error.message}`);
-        } finally {
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            sendButton.textContent = 'Send';
-            messageInput.focus();
-        }
-    });
-
-    // Handle textarea Enter key
+    // Handle Enter key
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -330,10 +439,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Initial status check
+    // Initial model status check and polling
     await checkModelStatus();
-    
-    // Poll for status every 5 seconds
     setInterval(checkModelStatus, 5000);
 });
 </script>

@@ -11,7 +11,8 @@ from app.services.auth import (
     get_password_hash,
     verify_password,
     create_access_token,
-    ACCESS_TOKEN_EXPIRE_MINUTES
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    get_current_user
 )
 
 class UserRegister(BaseModel):
@@ -21,6 +22,14 @@ class UserRegister(BaseModel):
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+@router.get("/verify-token")
+async def verify_token(current_user: User = Depends(get_current_user)):
+    """Verify if the token is valid"""
+    return {
+        "valid": True,
+        "username": current_user.username
+    }
 
 @router.get("/login")
 async def login_page(request: Request):
